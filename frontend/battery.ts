@@ -38,6 +38,5 @@ export function batteries(steamControllerOnly: boolean): ControllerBattery[] {
 			charging: !!c.bCharging,
 			led: `rgb(${Number(c.nLEDColorR) || 0}, ${Number(c.nLEDColorG) || 0}, ${Number(c.nLEDColorB) || 0})`,
 			player,
-		}))
 		}));
 }
