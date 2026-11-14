@@ -8,6 +8,9 @@ export interface ControllerBattery {
 	type: number;
 	level: number;
 	charging: boolean;
+	// Colour of the controller's LED, as set in Steam ("rgb(...)"), and its place in Steam's controller order (1, 2, ...)
+	led: string;
+	player: number;
 }
 
 // EControllerType values of the Steam Controller family (original, its second revision and the 2026 model).
@@ -19,16 +22,22 @@ function store(): any {
 }
 
 export function batteries(steamControllerOnly: boolean): ControllerBattery[] {
-	const list: any[] = store()?.m_controllerList ?? [];
-	return list
-		.filter((c) => c && (c.bWireless || c.bBluetooth))
-		.filter((c) => !steamControllerOnly || STEAM_CONTROLLER_TYPES.has(Number(c.eControllerType)))
-		.map((c) => ({
+	const list: any[] = (store()?.m_controllerList ?? []).filter((c: any) => c);
+	// Player numbers follow Steam's controller order across every controller, wired ones included
+	return [...list]
+		.sort((a, b) => Number(a.nControllerIndex) - Number(b.nControllerIndex))
+		.map((c, i) => ({ c, player: i + 1 }))
+		.filter(({ c }) => c.bWireless || c.bBluetooth)
+		.filter(({ c }) => !steamControllerOnly || STEAM_CONTROLLER_TYPES.has(Number(c.eControllerType)))
+		.map(({ c, player }) => ({
 			index: Number(c.nControllerIndex),
 			serial: String(c.strSerialNumber ?? c.nControllerIndex),
 			name: String(c.strName ?? ''),
 			type: Number(c.eControllerType),
 			level: Math.max(0, Math.min(100, Number(c.ucBatteryLevel) || 0)),
 			charging: !!c.bCharging,
+			led: `rgb(${Number(c.nLEDColorR) || 0}, ${Number(c.nLEDColorG) || 0}, ${Number(c.nLEDColorB) || 0})`,
+			player,
+		}))
 		}));
 }

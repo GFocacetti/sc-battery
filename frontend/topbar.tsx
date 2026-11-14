@@ -98,6 +98,30 @@ function SteamBatteryIcon({ level, charging }: { level: number; charging: boolea
 	);
 }
 
+// With several controllers: the player number on a dot of the controller's LED colour
+function PlayerBadge({ player, led }: { player: number; led: string }) {
+	const [r, g, b] = (led.match(/\d+/g) ?? ['0', '0', '0']).map(Number);
+	const light = 0.299 * r! + 0.587 * g! + 0.114 * b! > 150;
+	return (
+		<div
+			style={{
+				width: '14px',
+				height: '14px',
+				borderRadius: '50%',
+				background: led,
+				color: light ? '#000' : '#fff',
+				fontSize: '10px',
+				fontWeight: 'bold',
+				lineHeight: '14px',
+				textAlign: 'center',
+				flexShrink: 0,
+			}}
+		>
+			{player}
+		</div>
+	);
+}
+
 function Indicator() {
 	const [config, setConfig] = useState<Settings>(settings());
 	const [list, setList] = useState<ControllerBattery[]>(() => batteries(settings().steamControllerOnly));
@@ -131,6 +155,7 @@ function Indicator() {
 						)
 					}
 				>
+					{list.length > 1 && <PlayerBadge player={c.player} led={c.led} />}
 					{config.mode !== 'percent' && <SteamBatteryIcon level={c.level} charging={c.charging} />}
 					{config.mode !== 'icon' && <span>{c.level}%</span>}
 				</div>

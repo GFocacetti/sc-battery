@@ -6,7 +6,7 @@ A Millennium plugin that shows the battery level of the connected Steam Controll
 
 - A controller icon with Steam's own battery gauge (the one Big Picture uses) and the percentage, or either of them alone, right next to the news and notification buttons.
 - The gauge shows charging and turns red below 15%.
-- Every Steam Controller connected at the same time gets its own indicator.
+- Every Steam Controller connected at the same time gets its own indicator; with more than one, each shows its player number on a dot of its LED colour.
 - Optionally shows any other wireless controller Steam reports a battery for.
 - Click the indicator for a battery chart: scroll to zoom from the last hour to the last 30 days, hover for the level at any reading, and see the average drain with an estimate of the time left.
 - The history is kept across Steam restarts. While a controller is off, the chart joins the last reading before and the first one after with a dashed line; a green dot marks a charge done in the meantime.
