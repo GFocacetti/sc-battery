@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ControllerHistory, getHistory, onHistoryChanged } from 'history';
+import { onSettingsChanged, saveSettings, settings, Settings, TOGGLES } from 'settings';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -258,6 +259,42 @@ function drainPerHour(entry: ControllerHistory, from: number) {
 	return { game: rate(game), idle: rate(idle) };
 }
 
+// Small on/off switches for the parts of the top bar indicator
+function DisplaySwitches() {
+	const [config, setConfig] = useState<Settings>(settings());
+	useEffect(() => onSettingsChanged(setConfig) as unknown as () => void, []);
+	return (
+		<div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginBottom: '10px' }}>
+			{TOGGLES.map(({ key, label }) => {
+				const on = config[key];
+				return (
+					<div
+						key={key}
+						onClick={() => saveSettings({ ...config, [key]: !on })}
+						style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: on ? '#dcdedf' : '#8b929a' }}
+					>
+						<div style={{ position: 'relative', width: '24px', height: '13px', borderRadius: '7px', background: on ? LINE : 'rgba(255,255,255,0.15)', transition: 'background 0.15s' }}>
+							<div
+								style={{
+									position: 'absolute',
+									top: '2px',
+									left: on ? '13px' : '2px',
+									width: '9px',
+									height: '9px',
+									borderRadius: '50%',
+									background: '#fff',
+									transition: 'left 0.15s',
+								}}
+							/>
+						</div>
+						{label}
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
 export default function ChartPanel({ serial }: { serial?: string }) {
 	const [span, setSpan] = useState(DAY);
 	const [, refresh] = useState(0);
@@ -305,6 +342,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 					{spanLabel(span)}
 				</span>
 			</div>
+			<DisplaySwitches />
 			{entry ? (
 				<>
 					<div ref={graph}>

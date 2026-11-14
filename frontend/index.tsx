@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { definePlugin, DropdownItem, IconsModule, ToggleField } from '@steambrew/client';
-import { DisplayMode, loadSettings, onSettingsChanged, saveSettings, settings, Settings } from 'settings';
+import { definePlugin, IconsModule, ToggleField } from '@steambrew/client';
+import { loadSettings, onSettingsChanged, saveSettings, settings, Settings, TOGGLES } from 'settings';
 import { startTopBar } from 'topbar';
 
 declare global {
@@ -9,28 +9,19 @@ declare global {
 	}
 }
 
-const MODES: { data: DisplayMode; label: string }[] = [
-	{ data: 'both', label: 'Icon and percentage' },
-	{ data: 'icon', label: 'Icon only' },
-	{ data: 'percent', label: 'Percentage only' },
-];
-
-// Millennium's plugin settings panel, the only place the settings live
+// Millennium's plugin settings panel; the display switches are also above the chart
 function PluginPanel() {
 	const [config, setConfig] = useState<Settings>(settings());
 	useEffect(() => onSettingsChanged(setConfig) as unknown as () => void, []);
 
 	return (
 		<>
-			<DropdownItem
-				label="Show"
-				rgOptions={MODES}
-				selectedOption={config.mode}
-				onChange={(option: any) => saveSettings({ ...config, mode: option.data })}
-			/>
+			{TOGGLES.map(({ key, label }) => (
+				<ToggleField key={key} label={label} checked={config[key]} onChange={(value: boolean) => saveSettings({ ...config, [key]: value })} />
+			))}
 			<ToggleField
 				label="Steam Controller only"
-				description="When off, every wireless controller Steam reports a battery for is shown."
+				description="When off, every wireless controller with a known battery level is shown."
 				checked={config.steamControllerOnly}
 				onChange={(value: boolean) => saveSettings({ ...config, steamControllerOnly: value })}
 			/>

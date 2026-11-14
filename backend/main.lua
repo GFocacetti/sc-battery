@@ -2,6 +2,7 @@ local logger = require("logger")
 local millennium = require("millennium")
 local cjson = require("json")
 require("history") -- registers the scb_history_* calls
+local windows_battery = require("windows_battery") -- registers the scb_windows_batteries call
 
 -- Settings are stored in the plugin config as one JSON object, shaped by the frontend (see settings.ts)
 local KEY = "sc_battery_settings"
@@ -27,6 +28,8 @@ end
 local function on_load()
     logger:info("SC-Battery backend loading, Millennium " .. tostring(millennium.version()))
     millennium.ready()
+    -- Xbox controllers: Steam doesn't get their level, Windows does
+    pcall(windows_battery.start)
 end
 
 local function on_unload()

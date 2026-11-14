@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { IconsModule, Menu, showContextMenu } from '@steambrew/client';
-import { batteries, ControllerBattery } from 'battery';
+import { batteries, ControllerBattery, startWindowsBatteries, STEAM_CONTROLLER_TYPES } from 'battery';
 import { onSettingsChanged, settings, Settings } from 'settings';
 import ChartPanel from 'Chart';
 import { startHistory } from 'history';
@@ -81,32 +81,66 @@ function UprightGauge({ level, charging, Battery }: { level: number; charging: b
 	);
 }
 
-// Steam's battery gauge, the one Big Picture shows, next to the controller outline. It takes the level
-// as 0-1 and the charging state as Steam's EACState: 1 on battery, 2 charging.
-function SteamBatteryIcon({ level, charging }: { level: number; charging: boolean }) {
-	const Battery = IconsModule?.Battery;
-	if (!Battery) return <BatteryIcon level={level} charging={charging} />;
+// Steam Controllers use the project's own outline; any other model gets Steam's icon for it (the one
+// Big Picture shows), sized to the same height
+function ControllerIcon({ type }: { type: number }) {
+	const SteamIcon = IconsModule?.ControllerType;
+	const box = useRef<HTMLDivElement>(null);
+	const [zoom, setZoom] = useState(1);
+
+	// Steam's icons leave empty room around the drawing: it is measured and enlarged to the height
+	// of the Steam Controller outline (700 of its 720 units at 22 px)
+	useLayoutEffect(() => {
+		const svg = box.current?.querySelector('svg');
+		if (!svg) return;
+		const drawn = svg.getBoundingClientRect().height ? (svg as SVGGraphicsElement).getBBox() : null;
+		const view = svg.viewBox?.baseVal;
+		if (!drawn || !view?.height || !drawn.height) return;
+		const drawnPx = (drawn.height / view.height) * 22;
+		const next = (22 * (700 / 720)) / drawnPx;
+		if (Math.abs(next - zoom) > 0.01) setZoom(next);
+	});
+
+	if (STEAM_CONTROLLER_TYPES.has(type) || !SteamIcon) return <ControllerGlyph />;
 	return (
-		// The controller, then the gauge standing upright beside it. A rotated element keeps its
-		// unrotated box, so the gauge sits centred in a box of its upright size.
-		<div style={{ height: '22px', display: 'flex', alignItems: 'center', gap: '3px' }}>
-			<div style={{ height: '22px', color: '#dcdedf' }}>
-				<ControllerGlyph />
+		<div ref={box} className="scb-controller-icon" style={{ height: '22px', display: 'flex', alignItems: 'center' }}>
+			<style>{'.scb-controller-icon svg { height: 22px; width: auto; display: block; }'}</style>
+			<div style={{ zoom } as React.CSSProperties}>
+				<SteamIcon controllerType={type} />
 			</div>
-			<UprightGauge level={level} charging={charging} Battery={Battery} />
 		</div>
 	);
 }
 
-// With several controllers: the player number on a dot of the controller's LED colour
-function PlayerBadge({ player, led }: { player: number; led: string }) {
+// Steam's battery gauge, the one Big Picture shows, next to the controller outline. It takes the level
+// as 0-1 and the charging state as Steam's EACState: 1 on battery, 2 charging.
+function SteamBatteryIcon({ type, level, charging, showPad, showGauge }: { type: number; level: number; charging: boolean; showPad: boolean; showGauge: boolean }) {
+	const Battery = IconsModule?.Battery;
+	if (!Battery && showGauge && !showPad) return <BatteryIcon level={level} charging={charging} />;
+	return (
+		// The controller, then the gauge standing upright beside it. A rotated element keeps its
+		// unrotated box, so the gauge sits centred in a box of its upright size.
+		<div style={{ height: '22px', display: 'flex', alignItems: 'center', gap: '3px' }}>
+			{showPad && (
+			<div style={{ height: '22px', color: '#dcdedf' }}>
+				<ControllerIcon type={type} />
+			</div>
+			)}
+			{showGauge && (Battery ? <UprightGauge level={level} charging={charging} Battery={Battery} /> : <BatteryIcon level={level} charging={charging} />)}
+		</div>
+	);
+}
+
+// With several controllers: the player number on a dot of the controller's LED colour (grey when the
+// colour is turned off, a smaller plain dot when the number is)
+function PlayerBadge({ player, led, showNumber }: { player: number; led: string; showNumber: boolean }) {
 	const [r, g, b] = (led.match(/\d+/g) ?? ['0', '0', '0']).map(Number);
 	const light = 0.299 * r! + 0.587 * g! + 0.114 * b! > 150;
 	return (
 		<div
 			style={{
-				width: '14px',
-				height: '14px',
+				width: showNumber ? '14px' : '10px',
+				height: showNumber ? '14px' : '10px',
 				borderRadius: '50%',
 				background: led,
 				color: light ? '#000' : '#fff',
@@ -117,7 +151,7 @@ function PlayerBadge({ player, led }: { player: number; led: string }) {
 				flexShrink: 0,
 			}}
 		>
-			{player}
+			{showNumber && player}
 		</div>
 	);
 }
@@ -155,9 +189,9 @@ function Indicator() {
 						)
 					}
 				>
-					{list.length > 1 && <PlayerBadge player={c.player} led={c.led} />}
-					{config.mode !== 'percent' && <SteamBatteryIcon level={c.level} charging={c.charging} />}
-					{config.mode !== 'icon' && <span>{c.level}%</span>}
+					{list.length > 1 && (config.showColor || config.showNumber) && <PlayerBadge player={c.player} led={config.showColor ? c.led : 'rgb(220, 222, 223)'} showNumber={config.showNumber} />}
+					{(config.showPad || config.showGauge) && <SteamBatteryIcon type={c.type} level={c.level} charging={c.charging} showPad={config.showPad} showGauge={config.showGauge} />}
+					{config.showPercent && <span>{c.level}%</span>}
 				</div>
 			))}
 		</div>
@@ -184,6 +218,7 @@ function ensureMounted() {
 }
 
 export function startTopBar() {
+	startWindowsBatteries(30_000);
 	startHistory(POLL_MS).catch((err) => console.error('[SC-Battery] history failed', err));
 	ensureMounted();
 	setInterval(ensureMounted, 2000);
