@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { Menu, showContextMenu } from '@steambrew/client';
 import { batteries, ControllerBattery } from 'battery';
 import { onSettingsChanged, settings, Settings } from 'settings';
+import ChartPanel from 'Chart';
+import { startHistory } from 'history';
 
 const HOST_ID = 'sc-battery-indicator';
 const POLL_MS = 5000;
@@ -50,7 +53,23 @@ function Indicator() {
 	return (
 		<div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '100%', padding: '0 8px', color: '#dcdedf', fontSize: '12px' }}>
 			{list.map((c) => (
-				<div key={c.index} title={`${c.level}%${c.charging ? ' ⚡' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+				<div
+					key={c.index}
+					title={`${c.level}%${c.charging ? ' ⚡' : ''}`}
+					style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+					// Steam's own menus open in a popup window of their own, the only way to show above the store and community pages
+					onClick={(e) =>
+						showContextMenu(
+							<Menu label="SC-Battery">
+								<div style={{ padding: '12px', background: '#1e2329', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontFamily: '"Motiva Sans", Arial, sans-serif' }}>
+									<ChartPanel serial={c.serial} />
+								</div>
+							</Menu>,
+							e.currentTarget,
+							{ bForcePopup: true, bPreferPopLeft: true, bOverlapHorizontal: true, bShiftToFitWindow: true, strClassName: 'scb-chart-menu' },
+						)
+					}
+				>
 					{config.mode !== 'percent' && <BatteryIcon level={c.level} charging={c.charging} />}
 					{config.mode !== 'icon' && <span>{c.level}%</span>}
 				</div>
@@ -79,6 +98,7 @@ function ensureMounted() {
 }
 
 export function startTopBar() {
+	startHistory(POLL_MS).catch((err) => console.error('[SC-Battery] history failed', err));
 	ensureMounted();
 	setInterval(ensureMounted, 2000);
 }

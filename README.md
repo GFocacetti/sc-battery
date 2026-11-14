@@ -8,6 +8,8 @@ A Millennium plugin that shows the battery level of the connected Steam Controll
 - Green with a bolt while charging, red below 15%.
 - Every Steam Controller connected at the same time gets its own indicator.
 - Optionally shows any other wireless controller Steam reports a battery for.
+- Click the indicator for a battery chart over the last 24 hours, 7 days or 30 days, with the average drain and an estimate of the time left.
+- The history is kept across Steam restarts. While a controller is off, the chart joins the last reading before and the first one after with a dashed line; a green dot marks a charge done in the meantime.
 
 The level comes from Steam itself (the same value Big Picture shows), as reported by the controller firmware.
 
@@ -26,6 +28,8 @@ npm run build
 ```
 
 Copy `plugin.json`, `backend/` and `.millennium/Dist` into `Steam\millennium\plugins\sc-battery`, then restart Steam.
+
+The battery history is stored in `data/history.json` inside the plugin folder; readings older than 31 days are dropped.
 
 ## License
 

@@ -1,6 +1,7 @@
 local logger = require("logger")
 local millennium = require("millennium")
 local cjson = require("json")
+require("history") -- registers the scb_history_* calls
 
 -- Settings are stored in the plugin config as one JSON object, shaped by the frontend (see settings.ts)
 local KEY = "sc_battery_settings"

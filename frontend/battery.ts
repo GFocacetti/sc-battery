@@ -3,6 +3,8 @@
 
 export interface ControllerBattery {
 	index: number;
+	serial: string;
+	name: string;
 	type: number;
 	level: number;
 	charging: boolean;
@@ -23,6 +25,8 @@ export function batteries(steamControllerOnly: boolean): ControllerBattery[] {
 		.filter((c) => !steamControllerOnly || STEAM_CONTROLLER_TYPES.has(Number(c.eControllerType)))
 		.map((c) => ({
 			index: Number(c.nControllerIndex),
+			serial: String(c.strSerialNumber ?? c.nControllerIndex),
+			name: String(c.strName ?? ''),
 			type: Number(c.eControllerType),
 			level: Math.max(0, Math.min(100, Number(c.ucBatteryLevel) || 0)),
 			charging: !!c.bCharging,
