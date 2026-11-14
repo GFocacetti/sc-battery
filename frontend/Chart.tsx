@@ -256,7 +256,9 @@ function drainPerHour(entry: ControllerHistory) {
 		idle.time += span * (1 - share);
 	}
 	const rate = ({ drop, time }: { drop: number; time: number }) => (time > 30 * 60 * 1000 && drop > 0 ? (drop / time) * HOUR : 0);
-	return { game: rate(game), idle: rate(idle) };
+	// Levels move in steps of 1%: until a few points have gone, one step more or less changes a lot
+	const rough = (game.drop > 0 && game.drop < 5) || (idle.drop > 0 && idle.drop < 5);
+	return { game: rate(game), idle: rate(idle), rough };
 }
 
 // Small on/off switches for the parts of this controller's indicator in the top bar, with a way back
@@ -326,7 +328,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 	const to = Date.now();
 	const from = to - span;
 
-	const drain = entry ? drainPerHour(entry) : { game: 0, idle: 0 };
+	const drain = entry ? drainPerHour(entry) : { game: 0, idle: 0, rough: false };
 	const current = entry?.samples[entry.samples.length - 1];
 
 	return (
@@ -360,6 +362,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 						{drain.idle > 0 && <span>Outside games: {drain.idle.toFixed(1)}% per hour</span>}
 						{drain.game > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.game) * HOUR)} of play left</span>}
 						{!drain.game && drain.idle > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.idle) * HOUR)} left</span>}
+						{drain.rough && (drain.game > 0 || drain.idle > 0) && <span style={{ width: '100%', fontSize: '11px', fontStyle: 'italic' }}>Wait for more data for a more precise estimate.</span>}
 					</div>
 				</>
 			) : (
