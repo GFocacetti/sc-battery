@@ -233,16 +233,16 @@ function Graph({ entry, from, to }: { entry: ControllerHistory; from: number; to
 	);
 }
 
-// Average drain while connected and not charging, in % per hour over the shown range, split between
-// time with a game running and the rest. Between two readings the drop is shared out by how much of
-// that time was in game.
-function drainPerHour(entry: ControllerHistory, from: number) {
+// Average drain while connected and not charging, in % per hour, split between time with a game
+// running and the rest. It covers the whole saved history, not the zoomed range, so the figures stay
+// the same while zooming. Between two readings the drop is shared out by how much of that time was in game.
+function drainPerHour(entry: ControllerHistory) {
 	const now = Date.now();
 	const overlap = (a: number, b: number) =>
 		entry.play.reduce((sum, [start, end]) => sum + Math.max(0, Math.min(b, end || now) - Math.max(a, start)), 0);
 	const game = { drop: 0, time: 0 };
 	const idle = { drop: 0, time: 0 };
-	const s = entry.samples.filter((p) => p[0] >= from);
+	const s = entry.samples;
 	for (let i = 1; i < s.length; i++) {
 		const a = s[i - 1]!;
 		const b = s[i]!;
@@ -326,7 +326,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 	const to = Date.now();
 	const from = to - span;
 
-	const drain = entry ? drainPerHour(entry, from) : { game: 0, idle: 0 };
+	const drain = entry ? drainPerHour(entry) : { game: 0, idle: 0 };
 	const current = entry?.samples[entry.samples.length - 1];
 
 	return (
