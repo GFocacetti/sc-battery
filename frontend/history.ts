@@ -7,6 +7,8 @@ export interface ControllerHistory {
 	name: string;
 	samples: [number, number, number][];
 	sessions: [number, number][];
+	// Periods with a game running while the controller was connected: [start ms, end ms or 0 while playing]
+	play: [number, number][];
 	// Last time the controller was seen connected, saved every few minutes: closes a session left open when Steam quits
 	seen: number;
 }
@@ -50,6 +52,7 @@ function parse(raw: unknown): History {
 				name: String(entry.name ?? ''),
 				samples: Array.isArray(entry.samples) ? entry.samples : [],
 				sessions: Array.isArray(entry.sessions) ? entry.sessions : [],
+				play: Array.isArray(entry.play) ? entry.play : [],
 				seen: Number(entry.seen) || 0,
 			};
 		}
@@ -64,6 +67,7 @@ function prune(now: number) {
 	for (const entry of Object.values(history)) {
 		entry.samples = entry.samples.filter((s) => s[0] >= cutoff);
 		entry.sessions = entry.sessions.filter((s) => s[1] === 0 || s[1] >= cutoff);
+		entry.play = entry.play.filter((s) => s[1] === 0 || s[1] >= cutoff);
 	}
 }
 
@@ -85,6 +89,8 @@ function closeStaleSessions() {
 	for (const entry of Object.values(history)) {
 		const open = entry.sessions[entry.sessions.length - 1];
 		if (open && open[1] === 0) open[1] = Math.max(open[0], entry.seen, entry.samples[entry.samples.length - 1]?.[0] ?? 0);
+		const playing = entry.play[entry.play.length - 1];
+		if (playing && playing[1] === 0) playing[1] = Math.max(playing[0], open?.[1] ?? 0);
 	}
 }
 
@@ -103,8 +109,10 @@ function dropShortReadings() {
 function record(list: ControllerBattery[], now: number) {
 	let dirty = false;
 	const connected = new Set(list.map((c) => c.serial));
+	// Any game running, Steam or not (non-Steam shortcuts count too)
+	const inGame = ((window as any).SteamUIStore?.RunningApps?.length ?? 0) > 0;
 	for (const c of list) {
-		const entry = (history[c.serial] ??= { name: c.name, samples: [], sessions: [], seen: now });
+		const entry = (history[c.serial] ??= { name: c.name, samples: [], sessions: [], play: [], seen: now });
 		if (c.name && entry.name !== c.name) entry.name = c.name;
 		if (now - entry.seen >= SEEN_EVERY_MS) {
 			entry.seen = now;
@@ -114,6 +122,15 @@ function record(list: ControllerBattery[], now: number) {
 		if (!session || session[1] !== 0) {
 			session = [now, 0];
 			entry.sessions.push(session);
+			dirty = true;
+		}
+		const playing = entry.play[entry.play.length - 1];
+		const playOpen = !!playing && playing[1] === 0;
+		if (inGame && !playOpen) {
+			entry.play.push([now, 0]);
+			dirty = true;
+		} else if (!inGame && playOpen) {
+			playing[1] = now;
 			dirty = true;
 		}
 		// A level is kept only once it has held for a while: right after connecting Steam reports a
@@ -138,7 +155,14 @@ function record(list: ControllerBattery[], now: number) {
 	}
 	for (const [serial, entry] of Object.entries(history)) {
 		const session = entry.sessions[entry.sessions.length - 1];
-		if (!connected.has(serial)) pending.delete(serial);
+		if (!connected.has(serial)) {
+			pending.delete(serial);
+			const playing = entry.play[entry.play.length - 1];
+			if (playing && playing[1] === 0) {
+				playing[1] = now;
+				dirty = true;
+			}
+		}
 		if (!connected.has(serial) && session && session[1] === 0) {
 			session[1] = now;
 			// The last level is repeated at the disconnection so the line reaches the end of the session

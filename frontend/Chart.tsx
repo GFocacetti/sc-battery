@@ -232,21 +232,30 @@ function Graph({ entry, from, to }: { entry: ControllerHistory; from: number; to
 	);
 }
 
-// Average drain while in use and not charging, in % per hour, over the shown range
+// Average drain while connected and not charging, in % per hour over the shown range, split between
+// time with a game running and the rest. Between two readings the drop is shared out by how much of
+// that time was in game.
 function drainPerHour(entry: ControllerHistory, from: number) {
-	let drop = 0;
-	let time = 0;
+	const now = Date.now();
+	const overlap = (a: number, b: number) =>
+		entry.play.reduce((sum, [start, end]) => sum + Math.max(0, Math.min(b, end || now) - Math.max(a, start)), 0);
+	const game = { drop: 0, time: 0 };
+	const idle = { drop: 0, time: 0 };
 	const s = entry.samples.filter((p) => p[0] >= from);
 	for (let i = 1; i < s.length; i++) {
 		const a = s[i - 1]!;
 		const b = s[i]!;
 		const inSession = entry.sessions.some(([start, end]) => a[0] >= start && b[0] <= (end || Infinity));
-		if (!a[2] && !b[2] && inSession && b[1] <= a[1]) {
-			drop += a[1] - b[1];
-			time += b[0] - a[0];
-		}
+		if (a[2] || b[2] || !inSession || b[1] > a[1]) continue;
+		const span = b[0] - a[0];
+		const share = span > 0 ? overlap(a[0], b[0]) / span : 0;
+		game.drop += (a[1] - b[1]) * share;
+		game.time += span * share;
+		idle.drop += (a[1] - b[1]) * (1 - share);
+		idle.time += span * (1 - share);
 	}
-	return time > 30 * 60 * 1000 && drop > 0 ? (drop / time) * HOUR : 0;
+	const rate = ({ drop, time }: { drop: number; time: number }) => (time > 30 * 60 * 1000 && drop > 0 ? (drop / time) * HOUR : 0);
+	return { game: rate(game), idle: rate(idle) };
 }
 
 export default function ChartPanel({ serial }: { serial?: string }) {
@@ -274,7 +283,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 	const to = Date.now();
 	const from = to - span;
 
-	const drain = entry ? drainPerHour(entry, from) : 0;
+	const drain = entry ? drainPerHour(entry, from) : { game: 0, idle: 0 };
 	const current = entry?.samples[entry.samples.length - 1];
 
 	return (
@@ -301,10 +310,12 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 					<div ref={graph}>
 						<Graph entry={entry} from={from} to={to} />
 					</div>
-					<div style={{ display: 'flex', gap: '16px', margin: '8px 0 0', color: '#8b929a' }}>
+					<div style={{ display: 'flex', flexWrap: 'wrap', columnGap: '16px', rowGap: '2px', margin: '8px 0 0', color: '#8b929a' }}>
 						{current && <span>Now: {current[1]}%{current[2] ? ' (charging)' : ''}</span>}
-						{drain > 0 && <span>Average use: {drain.toFixed(1)}% per hour</span>}
-						{drain > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain) * HOUR)} left</span>}
+						{drain.game > 0 && <span>In game: {drain.game.toFixed(1)}% per hour</span>}
+						{drain.idle > 0 && <span>Outside games: {drain.idle.toFixed(1)}% per hour</span>}
+						{drain.game > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.game) * HOUR)} of play left</span>}
+						{!drain.game && drain.idle > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.idle) * HOUR)} left</span>}
 					</div>
 				</>
 			) : (

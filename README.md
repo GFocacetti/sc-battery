@@ -11,6 +11,7 @@ A Millennium plugin that shows the battery level of the connected Steam Controll
 - Click the indicator for a battery chart: scroll to zoom from the last hour to the last 30 days, hover for the level at any reading, and see the average drain with an estimate of the time left.
 - The history is kept across Steam restarts. While a controller is off, the chart joins the last reading before and the first one after with a dashed line; a green dot marks a charge done in the meantime.
 - A level is recorded once it has held for 15 seconds, so the placeholder Steam shows right after a controller connects never reaches the chart.
+- Separate drain figures in game and outside games (any running game counts, non-Steam ones too), with the play time left.
 
 The level comes from Steam itself (the same value Big Picture shows), as reported by the controller firmware.
 
