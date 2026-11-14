@@ -16,6 +16,7 @@ export type History = Record<string, ControllerHistory>;
 const KEEP_MS = 31 * 24 * 60 * 60 * 1000;
 const SAVE_DELAY_MS = 15_000;
 const SEEN_EVERY_MS = 5 * 60 * 1000;
+const STABLE_MS = 15_000;
 
 const historyGet = callable<[], string>('scb_history_get');
 const historySave = callable<[{ json: string }], boolean>('scb_history_save');
@@ -24,6 +25,8 @@ let history: History = {};
 let loaded = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
+// Per controller, a new level waiting to hold for STABLE_MS before it is recorded
+const pending = new Map<string, [number, number, number]>();
 
 export const getHistory = () => history;
 
@@ -85,6 +88,18 @@ function closeStaleSessions() {
 	}
 }
 
+// Readings saved before levels had to hold (see record): one replaced within STABLE_MS by another
+// reading of the same connection was a placeholder or a flicker, and is dropped
+function dropShortReadings() {
+	for (const entry of Object.values(history)) {
+		entry.samples = entry.samples.filter((s, i) => {
+			const next = entry.samples[i + 1];
+			if (!next || next[0] - s[0] >= STABLE_MS) return true;
+			return !entry.sessions.some(([start, end]) => s[0] >= start && next[0] <= (end || Infinity));
+		});
+	}
+}
+
 function record(list: ControllerBattery[], now: number) {
 	let dirty = false;
 	const connected = new Set(list.map((c) => c.serial));
@@ -95,20 +110,35 @@ function record(list: ControllerBattery[], now: number) {
 			entry.seen = now;
 			dirty = true;
 		}
-		const session = entry.sessions[entry.sessions.length - 1];
+		let session = entry.sessions[entry.sessions.length - 1];
 		if (!session || session[1] !== 0) {
-			entry.sessions.push([now, 0]);
+			session = [now, 0];
+			entry.sessions.push(session);
 			dirty = true;
 		}
-		const last = entry.samples[entry.samples.length - 1];
+		// A level is kept only once it has held for a while: right after connecting Steam reports a
+		// placeholder (100%) for a few seconds, and the level can flicker by 1% before settling
 		const charging = c.charging ? 1 : 0;
-		if (!last || last[1] !== c.level || last[2] !== charging) {
-			entry.samples.push([now, c.level, charging]);
+		const last = entry.samples[entry.samples.length - 1];
+		const sessionHasReading = !!last && last[0] >= session[0];
+		if (sessionHasReading && last[1] === c.level && last[2] === charging) {
+			pending.delete(c.serial);
+			continue;
+		}
+		const candidate = pending.get(c.serial);
+		if (!candidate || candidate[1] !== c.level || candidate[2] !== charging) {
+			pending.set(c.serial, [now, c.level, charging]);
+			continue;
+		}
+		if (now - candidate[0] >= STABLE_MS) {
+			entry.samples.push(candidate);
+			pending.delete(c.serial);
 			dirty = true;
 		}
 	}
 	for (const [serial, entry] of Object.entries(history)) {
 		const session = entry.sessions[entry.sessions.length - 1];
+		if (!connected.has(serial)) pending.delete(serial);
 		if (!connected.has(serial) && session && session[1] === 0) {
 			session[1] = now;
 			// The last level is repeated at the disconnection so the line reaches the end of the session
@@ -129,6 +159,7 @@ export async function startHistory(pollMs: number) {
 	loaded = true;
 	history = parse(await historyGet());
 	closeStaleSessions();
+	dropShortReadings();
 	prune(Date.now());
 	const tick = () => record(batteries(false), Date.now());
 	tick();
