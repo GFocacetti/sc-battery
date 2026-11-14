@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ControllerHistory, getHistory, onHistoryChanged } from 'history';
-import { onSettingsChanged, saveSettings, settings, Settings, TOGGLES } from 'settings';
+import { displayFor, onSettingsChanged, resetController, saveSettings, setForController, settings, Settings, TOGGLES } from 'settings';
 
 const HOUR = 60 * 60 * 1000;
 
@@ -259,18 +259,24 @@ function drainPerHour(entry: ControllerHistory, from: number) {
 	return { game: rate(game), idle: rate(idle) };
 }
 
-// Small on/off switches for the parts of the top bar indicator
-function DisplaySwitches() {
+// Small on/off switches for the parts of this controller's indicator in the top bar, with a way back
+// to the general settings (Millennium's plugin panel) once it has its own
+function DisplaySwitches({ serial }: { serial?: string }) {
 	const [config, setConfig] = useState<Settings>(settings());
 	useEffect(() => onSettingsChanged(setConfig) as unknown as () => void, []);
 	return (
 		<div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginBottom: '10px' }}>
+			{serial && config.perController[serial] && (
+				<div onClick={() => resetController(serial)} style={{ cursor: 'pointer', color: '#1a9fff', order: 1 }}>
+					Use general settings
+				</div>
+			)}
 			{TOGGLES.map(({ key, label }) => {
-				const on = config[key];
+				const on = serial ? displayFor(config, serial)[key] : config[key];
 				return (
 					<div
 						key={key}
-						onClick={() => saveSettings({ ...config, [key]: !on })}
+						onClick={() => (serial ? setForController(serial, key, !on) : saveSettings({ ...config, [key]: !on }))}
 						style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: on ? '#dcdedf' : '#8b929a' }}
 					>
 						<div style={{ position: 'relative', width: '24px', height: '13px', borderRadius: '7px', background: on ? LINE : 'rgba(255,255,255,0.15)', transition: 'background 0.15s' }}>
@@ -342,7 +348,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 					{spanLabel(span)}
 				</span>
 			</div>
-			<DisplaySwitches />
+			<DisplaySwitches serial={selected} />
 			{entry ? (
 				<>
 					<div ref={graph}>

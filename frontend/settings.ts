@@ -1,5 +1,7 @@
 import { callable } from '@steambrew/client';
 
+export type DisplayKey = 'showColor' | 'showNumber' | 'showPad' | 'showGauge' | 'showPercent';
+
 export interface Settings {
 	// Parts of each indicator: player dot in the LED colour, player number, controller icon, battery gauge, percentage
 	showColor: boolean;
@@ -7,6 +9,8 @@ export interface Settings {
 	showPad: boolean;
 	showGauge: boolean;
 	showPercent: boolean;
+	// Per controller (by serial number): its own choice for the switches above; missing ones follow the general setting
+	perController: Record<string, Partial<Record<DisplayKey, boolean>>>;
 	// Only Steam Controllers, or every wireless controller with a known battery level
 	steamControllerOnly: boolean;
 }
@@ -17,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	showPad: true,
 	showGauge: true,
 	showPercent: true,
+	perController: {},
 	steamControllerOnly: true,
 };
 
@@ -66,6 +71,7 @@ export async function loadSettings() {
 		showGauge: flag('showGauge', mode !== 'percent'),
 		showPercent: flag('showPercent', mode !== 'icon'),
 		steamControllerOnly: flag('steamControllerOnly', DEFAULT_SETTINGS.steamControllerOnly),
+		perController: readPerController(stored.perController),
 	};
 	listeners.forEach((l) => l(current));
 	return current;
@@ -77,10 +83,41 @@ export async function saveSettings(next: Settings) {
 	await saveSettingsCall({ json: JSON.stringify(next) });
 }
 
-export const TOGGLES: { key: keyof Settings; label: string }[] = [
+export const TOGGLES: { key: DisplayKey; label: string }[] = [
 	{ key: 'showColor', label: 'Colour' },
 	{ key: 'showNumber', label: 'Numbers' },
 	{ key: 'showPad', label: 'Controller icons' },
 	{ key: 'showGauge', label: 'Battery' },
 	{ key: 'showPercent', label: 'Percentage' },
 ];
+
+function readPerController(value: unknown): Settings['perController'] {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+	const result: Settings['perController'] = {};
+	for (const [serial, choice] of Object.entries<any>(value)) {
+		if (!choice || typeof choice !== 'object') continue;
+		const own: Partial<Record<DisplayKey, boolean>> = {};
+		for (const { key } of TOGGLES) if (typeof choice[key] === 'boolean') own[key] = choice[key];
+		if (Object.keys(own).length) result[serial] = own;
+	}
+	return result;
+}
+
+// What a controller's indicator shows: its own choices over the general ones
+export function displayFor(config: Settings, serial: string): Record<DisplayKey, boolean> {
+	const own = config.perController[serial] ?? {};
+	const result = {} as Record<DisplayKey, boolean>;
+	for (const { key } of TOGGLES) result[key] = own[key] ?? config[key];
+	return result;
+}
+
+export function setForController(serial: string, key: DisplayKey, value: boolean) {
+	const own = { ...displayFor(current, serial), [key]: value };
+	return saveSettings({ ...current, perController: { ...current.perController, [serial]: own } });
+}
+
+export function resetController(serial: string) {
+	const perController = { ...current.perController };
+	delete perController[serial];
+	return saveSettings({ ...current, perController });
+}

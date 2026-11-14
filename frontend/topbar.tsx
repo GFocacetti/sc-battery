@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { IconsModule, Menu, showContextMenu } from '@steambrew/client';
 import { batteries, ControllerBattery, startWindowsBatteries, STEAM_CONTROLLER_TYPES } from 'battery';
-import { onSettingsChanged, settings, Settings } from 'settings';
+import { displayFor, onSettingsChanged, settings, Settings } from 'settings';
 import ChartPanel from 'Chart';
 import { startHistory } from 'history';
 
@@ -189,9 +189,9 @@ function Indicator() {
 						)
 					}
 				>
-					{list.length > 1 && (config.showColor || config.showNumber) && <PlayerBadge player={c.player} led={config.showColor ? c.led : 'rgb(220, 222, 223)'} showNumber={config.showNumber} />}
-					{(config.showPad || config.showGauge) && <SteamBatteryIcon type={c.type} level={c.level} charging={c.charging} showPad={config.showPad} showGauge={config.showGauge} />}
-					{config.showPercent && <span>{c.level}%</span>}
+					{list.length > 1 && (displayFor(config, c.serial).showColor || displayFor(config, c.serial).showNumber) && <PlayerBadge player={c.player} led={displayFor(config, c.serial).showColor ? c.led : 'rgb(220, 222, 223)'} showNumber={displayFor(config, c.serial).showNumber} />}
+					{(displayFor(config, c.serial).showPad || displayFor(config, c.serial).showGauge) && <SteamBatteryIcon type={c.type} level={c.level} charging={c.charging} showPad={displayFor(config, c.serial).showPad} showGauge={displayFor(config, c.serial).showGauge} />}
+					{displayFor(config, c.serial).showPercent && <span>{c.level}%</span>}
 				</div>
 			))}
 		</div>

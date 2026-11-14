@@ -18,7 +18,7 @@ The level comes from Steam itself (the same value Big Picture shows), as reporte
 
 ## Settings
 
-The switches for what the indicator shows (colour, numbers, controller icons, battery, percentage) are above the chart and in Millennium's plugin panel (pick **SC-Battery**), which also has **Steam Controller only**.
+The switches for what the indicator shows (colour, numbers, controller icons, battery, percentage) are in Millennium's plugin panel (pick **SC-Battery**), together with **Steam Controller only**. The same switches above the chart apply to that controller alone; **Use general settings** brings it back in line.
 
 ## Building
 
