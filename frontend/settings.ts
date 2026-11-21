@@ -13,6 +13,8 @@ export interface Settings {
 	perController: Record<string, Partial<Record<DisplayKey, boolean>>>;
 	// Only Steam Controllers, or every wireless controller with a known battery level
 	steamControllerOnly: boolean;
+	// Per controller (by serial number): the colour chosen for its dot ("#rrggbb"); missing ones use the LED colour set in Steam
+	colors: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	showPercent: true,
 	perController: {},
 	steamControllerOnly: true,
+	colors: {},
 };
 
 const getSettings = callable<[], string>('scb_get_settings');
@@ -72,6 +75,11 @@ export async function loadSettings() {
 		showPercent: flag('showPercent', mode !== 'icon'),
 		steamControllerOnly: flag('steamControllerOnly', DEFAULT_SETTINGS.steamControllerOnly),
 		perController: readPerController(stored.perController),
+		colors: Object.fromEntries(
+			Object.entries<unknown>(stored.colors && typeof stored.colors === 'object' ? (stored.colors as Record<string, unknown>) : {}).filter(
+				(entry): entry is [string, string] => typeof entry[1] === 'string' && /^#[0-9a-f]{6}$/i.test(entry[1]),
+			),
+		),
 	};
 	listeners.forEach((l) => l(current));
 	return current;
@@ -114,6 +122,16 @@ export function displayFor(config: Settings, serial: string): Record<DisplayKey,
 export function setForController(serial: string, key: DisplayKey, value: boolean) {
 	const own = { ...displayFor(current, serial), [key]: value };
 	return saveSettings({ ...current, perController: { ...current.perController, [serial]: own } });
+}
+
+// The colour of a controller's dot: the one chosen in the chart's options, else the LED colour set in Steam
+export const colorFor = (config: Settings, serial: string, led: string) => config.colors[serial] ?? led;
+
+export function setColor(serial: string, color: string | undefined) {
+	const colors = { ...current.colors };
+	if (color) colors[serial] = color;
+	else delete colors[serial];
+	return saveSettings({ ...current, colors });
 }
 
 export function resetController(serial: string) {

@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ControllerHistory, getHistory, onHistoryChanged } from 'history';
-import { displayFor, onSettingsChanged, resetController, saveSettings, setForController, settings, Settings, TOGGLES } from 'settings';
+import { colorFor, displayFor, onSettingsChanged, resetController, saveSettings, setColor, setForController, settings, Settings, TOGGLES } from 'settings';
+import { batteries } from 'battery';
+
+// "rgb(r, g, b)" -> "#rrggbb", for the colour picker
+const toHex = (rgb: string) => {
+	if (rgb.startsWith('#')) return rgb;
+	const [r, g, b] = (rgb.match(/\d+/g) ?? ['255', '255', '255']).map(Number);
+	return '#' + [r, g, b].map((n) => Math.max(0, Math.min(255, n ?? 255)).toString(16).padStart(2, '0')).join('');
+};
 
 const HOUR = 60 * 60 * 1000;
 
@@ -296,6 +304,31 @@ function DisplaySwitches({ serial }: { serial?: string }) {
 							/>
 						</div>
 						{label}
+						{/* Next to "Colour": the dot's colour, chosen freely (the LED colour set in Steam until changed) */}
+						{key === 'showColor' && serial && (
+							<>
+								<input
+									type="color"
+									title="Dot colour"
+									value={toHex(colorFor(config, serial, batteries(false).find((b) => b.serial === serial)?.led ?? '#ffffff'))}
+									onClick={(e) => e.stopPropagation()}
+									onChange={(e) => setColor(serial, e.target.value)}
+									style={{ width: '20px', height: '16px', padding: 0, border: '1px solid rgba(255,255,255,0.25)', borderRadius: '3px', background: 'none', cursor: 'pointer' }}
+								/>
+								{config.colors[serial] && (
+									<span
+										title="Back to the LED colour set in Steam"
+										onClick={(e) => {
+											e.stopPropagation();
+											setColor(serial, undefined);
+										}}
+										style={{ color: '#8b929a', cursor: 'pointer' }}
+									>
+										↺
+									</span>
+								)}
+							</>
+						)}
 					</div>
 				);
 			})}
