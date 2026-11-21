@@ -23,6 +23,8 @@ function store(): any {
 }
 
 const MICROSOFT = 0x045e;
+// Sony: DualShock 4 and DualSense, whose level Steam reads over USB as well as over Bluetooth
+const SONY = 0x054c;
 
 // Levels Windows knows for Bluetooth controllers (Xbox ones), refreshed from the backend
 let windowsLevels: { name: string; level: number }[] = [];
@@ -55,7 +57,10 @@ export function batteries(steamControllerOnly: boolean): ControllerBattery[] {
 			const fromWindows = Number(c.unVendorID) === MICROSOFT && !c.bWireless && !c.bBluetooth ? xboxFromWindows[xboxUsed++] : undefined;
 			return { c, player: i + 1, fromWindows };
 		})
-		.filter(({ c, fromWindows }) => c.bWireless || c.bBluetooth || fromWindows)
+		// Wired controllers too when they have a real battery reading: PlayStation ones (Steam reads their level
+		// over USB as well), or any that Steam reports charging or below 100%. Wired pads without a battery, and
+		// wired Xbox ones (Steam gives them a fake 100%), stay out
+		.filter(({ c, fromWindows }) => c.bWireless || c.bBluetooth || fromWindows || Number(c.unVendorID) === SONY || !!c.bCharging || (Number(c.ucBatteryLevel) > 0 && Number(c.ucBatteryLevel) < 100))
 		.filter(({ c }) => !steamControllerOnly || STEAM_CONTROLLER_TYPES.has(Number(c.eControllerType)))
 		.map(({ c, player, fromWindows }) => ({
 			index: Number(c.nControllerIndex),
