@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { IconsModule, Menu, showContextMenu } from '@steambrew/client';
+import { findClassModule, IconsModule, Menu, showContextMenu } from '@steambrew/client';
 import { batteries, ControllerBattery, startWindowsBatteries, STEAM_CONTROLLER_TYPES } from 'battery';
 import { displayFor, onSettingsChanged, settings, Settings } from 'settings';
 import ChartPanel from 'Chart';
@@ -19,9 +19,12 @@ function mainDocument(): Document | undefined {
 }
 
 // The buttons on the right of the title bar (news, notifications, account): the indicator goes first.
-// Steam keeps the readable class name next to the generated one.
+// Steam's newer builds no longer keep the readable class name on the element, only the generated one: that is
+// looked up in Steam's class map (the readable name stays as a fallback for older builds).
 function anchor(doc: Document): Element | null {
-	return doc.querySelector('.TitleBarControls')?.firstElementChild ?? null;
+	const generated: string | undefined = findClassModule((m) => m.TitleBarControls && m.TitleBar)?.TitleBarControls;
+	const selector = ['.TitleBarControls', ...(generated ? ['.' + generated.trim().split(/\s+/).join('.')] : [])].join(', ');
+	return doc.querySelector(selector)?.firstElementChild ?? null;
 }
 
 function BatteryIcon({ level, charging }: { level: number; charging: boolean }) {

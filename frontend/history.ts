@@ -19,6 +19,10 @@ const KEEP_MS = 31 * 24 * 60 * 60 * 1000;
 const SAVE_DELAY_MS = 15_000;
 const SEEN_EVERY_MS = 5 * 60 * 1000;
 const STABLE_MS = 15_000;
+// A 100% between two levels this close (in %) is Steam's placeholder, not a reading
+const PEAK_RANGE = 5;
+// A 100% (not charging) after a lower level, waiting for the next level to tell whether it was real
+const held = new Map<string, [number, number, number]>();
 
 const historyGet = callable<[], string>('scb_history_get');
 const historySave = callable<[{ json: string }], boolean>('scb_history_save');
@@ -106,6 +110,19 @@ function dropShortReadings() {
 	}
 }
 
+// Placeholder 100% readings already saved: not charging, and the levels before and after it are within
+// PEAK_RANGE of each other (85% -> 100% -> 85%)
+function dropPlaceholderHundreds() {
+	for (const entry of Object.values(history)) {
+		entry.samples = entry.samples.filter((s, i) => {
+			const prev = entry.samples[i - 1];
+			const next = entry.samples[i + 1];
+			if (s[1] !== 100 || s[2] || !prev || prev[1] >= 100 || !next) return true;
+			return Math.abs(next[1] - prev[1]) > PEAK_RANGE;
+		});
+	}
+}
+
 function record(list: ControllerBattery[], now: number) {
 	let dirty = false;
 	const connected = new Set(list.map((c) => c.serial));
@@ -140,6 +157,8 @@ function record(list: ControllerBattery[], now: number) {
 		const sessionHasReading = !!last && last[0] >= session[0];
 		if (sessionHasReading && last[1] === c.level && last[2] === charging) {
 			pending.delete(c.serial);
+			// Back to the level before a held 100%: that 100% was the placeholder
+			held.delete(c.serial);
 			continue;
 		}
 		const candidate = pending.get(c.serial);
@@ -148,8 +167,17 @@ function record(list: ControllerBattery[], now: number) {
 			continue;
 		}
 		if (now - candidate[0] >= STABLE_MS) {
-			entry.samples.push(candidate);
 			pending.delete(c.serial);
+			// Steam's placeholder 100% can last minutes: a 100% (not charging) after a lower level waits for
+			// the next level. Within PEAK_RANGE of the level before it, it was the placeholder and is dropped
+			if (candidate[1] === 100 && !charging && last && last[1] < 100) {
+				if (!held.has(c.serial)) held.set(c.serial, candidate);
+				continue;
+			}
+			const peak = held.get(c.serial);
+			held.delete(c.serial);
+			if (peak && (!last || Math.abs(candidate[1] - last[1]) > PEAK_RANGE)) entry.samples.push(peak);
+			entry.samples.push(candidate);
 			dirty = true;
 		}
 	}
@@ -157,6 +185,7 @@ function record(list: ControllerBattery[], now: number) {
 		const session = entry.sessions[entry.sessions.length - 1];
 		if (!connected.has(serial)) {
 			pending.delete(serial);
+			held.delete(serial);
 			const playing = entry.play[entry.play.length - 1];
 			if (playing && playing[1] === 0) {
 				playing[1] = now;
@@ -184,6 +213,7 @@ export async function startHistory(pollMs: number) {
 	history = parse(await historyGet());
 	closeStaleSessions();
 	dropShortReadings();
+	dropPlaceholderHundreds();
 	prune(Date.now());
 	const tick = () => record(batteries(false), Date.now());
 	tick();

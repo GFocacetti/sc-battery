@@ -305,10 +305,13 @@ function DisplaySwitches({ serial }: { serial?: string }) {
 
 export default function ChartPanel({ serial }: { serial?: string }) {
 	const [span, setSpan] = useState(DAY);
+	const [optionsOpen, setOptionsOpen] = useState(false);
+	// How far back from now the chart ends: dragging with the left button moves it through the past
+	const [offset, setOffset] = useState(0);
 	const [, refresh] = useState(0);
 	useEffect(() => onHistoryChanged(() => refresh((n) => n + 1)), []);
 
-	// The wheel zooms in and out, always ending now; a native listener so the page doesn't scroll as well
+	// The wheel zooms in and out, keeping the end of the chart where it is; a native listener so the page doesn't scroll as well
 	const graph = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		const el = graph.current;
@@ -325,7 +328,7 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 	const serials = Object.keys(history);
 	const [selected, setSelected] = useState(serial && history[serial] ? serial : serials[0]);
 	const entry = selected ? history[selected] : undefined;
-	const to = Date.now();
+	const to = Date.now() - offset;
 	const from = to - span;
 
 	const drain = entry ? drainPerHour(entry) : { game: 0, idle: 0, rough: false };
@@ -333,27 +336,61 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 
 	return (
 		<div style={{ width: `${W}px`, color: '#dcdedf', fontSize: '12px' }}>
+			{/* "Options" opens and closes, like a spoiler, the controller choice and the display switches: closed,
+			    only the chart and the figures under it show */}
 			<div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
-				{serials.length > 1 ? (
-					<select value={selected} onChange={(e) => setSelected(e.target.value)} style={{ background: '#2a2e35', color: '#dcdedf', border: 'none', padding: '3px' }}>
-						{serials.map((s) => (
-							<option key={s} value={s}>
-								{history[s]!.name || s}
-							</option>
-						))}
-					</select>
-				) : (
-					<strong style={{ fontSize: '13px' }}>{entry?.name || 'Steam Controller'}</strong>
-				)}
+				<div onClick={() => setOptionsOpen((o) => !o)} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: optionsOpen ? '#dcdedf' : '#8b929a', userSelect: 'none' }}>
+					<span style={{ display: 'inline-block', fontSize: '9px', transition: 'transform 0.15s', transform: optionsOpen ? 'rotate(90deg)' : 'none' }}>▶</span>
+					Options
+				</div>
 				<div style={{ flex: 1 }} />
 				<span style={{ color: '#8b929a' }} title="Scroll to zoom">
 					{spanLabel(span)}
 				</span>
 			</div>
-			<DisplaySwitches serial={selected} />
+			{optionsOpen && (
+				<div style={{ marginBottom: '10px', padding: '8px 10px 2px', borderRadius: '4px', background: 'rgba(255,255,255,0.04)' }}>
+					<div style={{ marginBottom: '8px' }}>
+						{serials.length > 1 ? (
+							<select value={selected} onChange={(e) => setSelected(e.target.value)} style={{ background: '#2a2e35', color: '#dcdedf', border: 'none', padding: '3px' }}>
+								{serials.map((s) => (
+									<option key={s} value={s}>
+										{history[s]!.name || s}
+									</option>
+								))}
+							</select>
+						) : (
+							<strong style={{ fontSize: '13px' }}>{entry?.name || 'Steam Controller'}</strong>
+						)}
+					</div>
+					<DisplaySwitches serial={selected} />
+				</div>
+			)}
 			{entry ? (
 				<>
-					<div ref={graph}>
+					<div
+						ref={graph}
+						style={{ cursor: 'grab' }}
+						// A double click brings the chart back to now
+						onDoubleClick={() => setOffset(0)}
+						onMouseDown={(e) => {
+							if (e.button !== 0) return;
+							e.preventDefault();
+							const win = e.currentTarget.ownerDocument.defaultView!;
+							const startX = e.clientX;
+							const startOffset = offset;
+							const msPerPx = span / PLOT_W;
+							const oldest = entry.samples[0]?.[0] ?? Date.now();
+							// Dragging right shows earlier times; never past now, nor past the first reading
+							const move = (ev: MouseEvent) => setOffset(Math.min(Math.max(0, startOffset + (ev.clientX - startX) * msPerPx), Math.max(0, Date.now() - oldest - span / 2)));
+							const up = () => {
+								win.removeEventListener('mousemove', move);
+								win.removeEventListener('mouseup', up);
+							};
+							win.addEventListener('mousemove', move);
+							win.addEventListener('mouseup', up);
+						}}
+					>
 						<Graph entry={entry} from={from} to={to} />
 					</div>
 					<div style={{ display: 'flex', flexWrap: 'wrap', columnGap: '16px', rowGap: '2px', margin: '8px 0 0', color: '#8b929a' }}>
