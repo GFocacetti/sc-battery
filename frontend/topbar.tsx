@@ -56,6 +56,10 @@ function UprightGauge({ level, charging, Battery }: { level: number; charging: b
 	const gauge = useRef<HTMLDivElement>(null);
 	const [shift, setShift] = useState({ x: 0, y: 0 });
 
+	// Each correction is measured again on the next render. A theme can make the shift useless (the drawing doesn't move,
+	// or moves differently): the corrections then never end and React stops drawing the indicator. So at most a few
+	// corrections, and only while the distance from the centre keeps shrinking.
+	const tries = useRef({ count: 0, last: Infinity });
 	useLayoutEffect(() => {
 		const drawn = gauge.current?.querySelector('svg > g') ?? gauge.current?.querySelector('svg');
 		if (!box.current || !drawn) return;
@@ -63,7 +67,10 @@ function UprightGauge({ level, charging, Battery }: { level: number; charging: b
 		const inner = drawn.getBoundingClientRect();
 		const dx = outer.left + outer.width / 2 - (inner.left + inner.width / 2);
 		const dy = outer.top + outer.height / 2 - (inner.top + inner.height / 2);
-		if (Math.abs(dx) > 0.25 || Math.abs(dy) > 0.25) setShift((s) => ({ x: s.x + dx, y: s.y + dy }));
+		const distance = Math.hypot(dx, dy);
+		if (distance <= 0.35 || tries.current.count >= 4 || distance >= tries.current.last) return;
+		tries.current = { count: tries.current.count + 1, last: distance };
+		setShift((s) => ({ x: s.x + dx, y: s.y + dy }));
 	});
 
 	return (
@@ -174,6 +181,9 @@ function Indicator() {
 	if (!list.length) return null;
 	return (
 		<div style={{ display: 'flex', alignItems: 'center', gap: '10px', height: '100%', padding: '0 8px', color: '#dcdedf', fontSize: '12px' }}>
+			{/* Some themes hide every SVG among the title bar buttons to draw their own icons there (Windows 95, for one):
+			    the indicator's drawings are not theirs to replace */}
+			<style>{`#${HOST_ID} svg { display: block !important; }`}</style>
 			{list.map((c) => (
 				<div
 					key={c.index}
