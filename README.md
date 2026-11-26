@@ -43,6 +43,12 @@ Copy `plugin.json`, `backend/` and `.millennium/Dist` into `Steam\millennium\plu
 
 The battery history is stored in `data/history.json` inside the plugin folder; readings older than 31 days are dropped.
 
+## Feedback and contributing
+
+Found a problem, or want a controller to be supported? Please [open an issue](../../issues).
+
+Any contribution that makes the plugin better is welcome: pull requests, ideas and tests on controllers I don't have.
+
 ## License
 
 GPL-3.0-only. See [LICENSE](LICENSE).
