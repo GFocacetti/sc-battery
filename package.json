@@ -17,6 +17,6 @@
   "version": "0.1.0",
   "description": "Shows the battery level of the connected Steam Controller in the top bar of the Steam desktop client, as Big Picture does.",
   "main": "./frontend/index.jsx",
-  "author": "Giuseppe Focacetti",
+  "author": "GFocacetti",
   "license": "GPL-3.0-only"
 }

@@ -2,6 +2,7 @@
 	"$schema": "https://raw.githubusercontent.com/SteamClientHomebrew/Millennium/refs/heads/main/src/system/plugin-schema.json",
 	"name": "sc-battery",
 	"common_name": "SC-Battery",
+	"author": "GFocacetti",
 	"description": "Shows the battery level of the connected Steam Controller in the top bar of the Steam desktop client, as Big Picture does.",
 	"backendType": "lua",
 	"useBackend": true,
