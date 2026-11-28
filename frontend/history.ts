@@ -21,7 +21,10 @@ const SEEN_EVERY_MS = 5 * 60 * 1000;
 const STABLE_MS = 15_000;
 // A 100% between two levels this close (in %) is Steam's placeholder, not a reading
 const PEAK_RANGE = 5;
-// A 100% (not charging) after a lower level, waiting for the next level to tell whether it was real
+// A battery drains a few % at a time: a 100% followed in the same connection by a level more than this
+// lower (100% -> 25%) was a placeholder too, however long it lasted
+const DROP_RANGE = 20;
+// A 100% (not charging), waiting for the next level to tell whether it was real
 const held = new Map<string, [number, number, number]>();
 
 const historyGet = callable<[], string>('scb_history_get');
@@ -110,16 +113,33 @@ function dropShortReadings() {
 	}
 }
 
-// Placeholder 100% readings already saved: not charging, and the levels before and after it are within
-// PEAK_RANGE of each other (85% -> 100% -> 85%)
+const sameSession = (entry: ControllerHistory, a: number, b: number) =>
+	entry.sessions.some(([start, end]) => a >= start && b <= (end || Infinity));
+
+// Placeholder 100% readings already saved, as a run of 100% (not charging): the levels before and after
+// it are within PEAK_RANGE of each other (85% -> 100% -> 85%), or the level after it, in the same
+// connection, is more than DROP_RANGE lower (100% for hours, then 25%)
 function dropPlaceholderHundreds() {
 	for (const entry of Object.values(history)) {
-		entry.samples = entry.samples.filter((s, i) => {
-			const prev = entry.samples[i - 1];
-			const next = entry.samples[i + 1];
-			if (s[1] !== 100 || s[2] || !prev || prev[1] >= 100 || !next) return true;
-			return Math.abs(next[1] - prev[1]) > PEAK_RANGE;
-		});
+		const samples = entry.samples;
+		const drop = new Set<number>();
+		const isHundred = (s?: [number, number, number]) => !!s && s[1] === 100 && !s[2];
+		for (let i = 0; i < samples.length; ) {
+			if (!isHundred(samples[i])) {
+				i++;
+				continue;
+			}
+			let j = i;
+			while (isHundred(samples[j + 1])) j++;
+			const first = samples[i]!;
+			const prev = samples[i - 1];
+			const next = samples[j + 1];
+			const peak = !!prev && prev[1] < 100 && !!next && Math.abs(next[1] - prev[1]) <= PEAK_RANGE;
+			const cliff = !!next && next[1] < 100 - DROP_RANGE && sameSession(entry, first[0], next[0]);
+			if (peak || cliff) for (let k = i; k <= j; k++) drop.add(k);
+			i = j + 1;
+		}
+		if (drop.size) entry.samples = samples.filter((_, i) => !drop.has(i));
 	}
 }
 
@@ -168,15 +188,19 @@ function record(list: ControllerBattery[], now: number) {
 		}
 		if (now - candidate[0] >= STABLE_MS) {
 			pending.delete(c.serial);
-			// Steam's placeholder 100% can last minutes: a 100% (not charging) after a lower level waits for
-			// the next level. Within PEAK_RANGE of the level before it, it was the placeholder and is dropped
-			if (candidate[1] === 100 && !charging && last && last[1] < 100) {
+			// Steam's placeholder 100% can last minutes or hours: a 100% (not charging) waits for the next
+			// level. Back within PEAK_RANGE of the level before it, or more than DROP_RANGE below 100%, it was
+			// the placeholder and is dropped; a controller disconnected while it waits drops it too
+			if (candidate[1] === 100 && !charging) {
 				if (!held.has(c.serial)) held.set(c.serial, candidate);
 				continue;
 			}
 			const peak = held.get(c.serial);
 			held.delete(c.serial);
-			if (peak && (!last || Math.abs(candidate[1] - last[1]) > PEAK_RANGE)) entry.samples.push(peak);
+			const real =
+				candidate[1] >= 100 - DROP_RANGE &&
+				(!last || last[1] >= 100 || Math.abs(candidate[1] - last[1]) > PEAK_RANGE);
+			if (peak && real) entry.samples.push(peak);
 			entry.samples.push(candidate);
 			dirty = true;
 		}
@@ -195,8 +219,9 @@ function record(list: ControllerBattery[], now: number) {
 		if (!connected.has(serial) && session && session[1] === 0) {
 			session[1] = now;
 			// The last level is repeated at the disconnection so the line reaches the end of the session
+			// (only a level read in this session: one from before would draw a level the session never had)
 			const last = entry.samples[entry.samples.length - 1];
-			if (last) entry.samples.push([now, last[1], last[2]]);
+			if (last && last[0] >= session[0]) entry.samples.push([now, last[1], last[2]]);
 			dirty = true;
 		}
 	}
