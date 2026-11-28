@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { definePlugin, IconsModule, ToggleField } from '@steambrew/client';
 import { loadSettings, onSettingsChanged, saveSettings, settings, Settings, TOGGLES } from 'settings';
 import { startTopBar } from 'topbar';
+import { loadLanguage, t as tr } from 'lang';
 
 declare global {
 	interface Window {
@@ -17,11 +18,11 @@ function PluginPanel() {
 	return (
 		<>
 			{TOGGLES.map(({ key, label }) => (
-				<ToggleField key={key} label={label} checked={config[key]} onChange={(value: boolean) => saveSettings({ ...config, [key]: value })} />
+				<ToggleField key={key} label={tr(label)} checked={config[key]} onChange={(value: boolean) => saveSettings({ ...config, [key]: value })} />
 			))}
 			<ToggleField
-				label="Steam Controller only"
-				description="When off, every wireless controller with a known battery level is shown."
+				label={tr('Steam Controller only')}
+				description={tr('When off, every wireless controller with a known battery level is shown.')}
 				checked={config.steamControllerOnly}
 				onChange={(value: boolean) => saveSettings({ ...config, steamControllerOnly: value })}
 			/>
@@ -44,7 +45,8 @@ async function loadSettingsWhenReady() {
 export default definePlugin(async () => {
 	if (!window.__scb_started__) {
 		window.__scb_started__ = true;
-		startTopBar();
+		// Texts follow Steam's language: known before the indicator draws any
+		loadLanguage().finally(startTopBar);
 		loadSettingsWhenReady().catch((err) => console.error('[SC-Battery] settings failed', err));
 	}
 

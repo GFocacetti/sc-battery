@@ -1,11 +1,13 @@
 import { callable } from '@steambrew/client';
-import { batteries, ControllerBattery } from 'battery';
+import { batteries, ControllerBattery, controllerKey } from 'battery';
 
 // Per controller (by serial number): the level readings and the connection sessions.
-// A sample is [time ms, level 0-100, charging 0/1]; a session is [connected ms, disconnected ms or 0 while connected].
+// A sample is [time ms, level 0-100, charging 0/1, 1 when the level is one of four steps (Xbox Wireless Adapter)]; a session is [connected ms, disconnected ms or 0 while connected].
+export type Sample = [number, number, number] | [number, number, number, number];
+
 export interface ControllerHistory {
 	name: string;
-	samples: [number, number, number][];
+	samples: Sample[];
 	sessions: [number, number][];
 	// Periods with a game running while the controller was connected: [start ms, end ms or 0 while playing]
 	play: [number, number][];
@@ -25,7 +27,7 @@ const PEAK_RANGE = 5;
 // lower (100% -> 25%) was a placeholder too, however long it lasted
 const DROP_RANGE = 20;
 // A 100% (not charging), waiting for the next level to tell whether it was real
-const held = new Map<string, [number, number, number]>();
+const held = new Map<string, Sample>();
 
 const historyGet = callable<[], string>('scb_history_get');
 const historySave = callable<[{ json: string }], boolean>('scb_history_save');
@@ -35,7 +37,7 @@ let loaded = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 // Per controller, a new level waiting to hold for STABLE_MS before it is recorded
-const pending = new Map<string, [number, number, number]>();
+const pending = new Map<string, Sample>();
 
 export const getHistory = () => history;
 
@@ -67,6 +69,34 @@ function parse(raw: unknown): History {
 	} catch {
 		return {};
 	}
+}
+
+// History saved under Steam's raw serials: the entries of one controller (an Xbox one under each connection's
+// serial) become one, and the placeholder ones from before Steam signs in, with no key, are dropped. A name
+// that is one of Steam's untranslated text ids ("#controller_xboxone") gives way to a real one.
+function mergeByKey(saved: History): History {
+	const result: History = {};
+	const byTime = <T extends number[]>(a: T, b: T) => a[0]! - b[0]!;
+	for (const [serial, entry] of Object.entries(saved)) {
+		const key = controllerKey(serial);
+		if (!key) continue;
+		const name = entry.name.startsWith('#') ? '' : entry.name;
+		const into = result[key];
+		if (!into) {
+			result[key] = { ...entry, name };
+			continue;
+		}
+		if (!into.name || (name && entry.samples.length > into.samples.length)) into.name = name || into.name;
+		into.samples = [...into.samples, ...entry.samples].sort(byTime);
+		into.sessions = [...into.sessions, ...entry.sessions].sort(byTime);
+		into.play = [...into.play, ...entry.play].sort(byTime);
+		into.seen = Math.max(into.seen, entry.seen);
+	}
+	for (const [key, entry] of Object.entries(result)) {
+		if (!entry.samples.length) delete result[key];
+		else if (!entry.name) entry.name = key;
+	}
+	return result;
 }
 
 function prune(now: number) {
@@ -123,7 +153,8 @@ function dropPlaceholderHundreds() {
 	for (const entry of Object.values(history)) {
 		const samples = entry.samples;
 		const drop = new Set<number>();
-		const isHundred = (s?: [number, number, number]) => !!s && s[1] === 100 && !s[2];
+		// (a full battery in steps drops straight to medium: that 100% was real)
+		const isHundred = (s?: Sample) => !!s && s[1] === 100 && !s[2] && !s[3];
 		for (let i = 0; i < samples.length; ) {
 			if (!isHundred(samples[i])) {
 				i++;
@@ -183,7 +214,7 @@ function record(list: ControllerBattery[], now: number) {
 		}
 		const candidate = pending.get(c.serial);
 		if (!candidate || candidate[1] !== c.level || candidate[2] !== charging) {
-			pending.set(c.serial, [now, c.level, charging]);
+			pending.set(c.serial, c.steps ? [now, c.level, charging, 1] : [now, c.level, charging]);
 			continue;
 		}
 		if (now - candidate[0] >= STABLE_MS) {
@@ -191,7 +222,7 @@ function record(list: ControllerBattery[], now: number) {
 			// Steam's placeholder 100% can last minutes or hours: a 100% (not charging) waits for the next
 			// level. Back within PEAK_RANGE of the level before it, or more than DROP_RANGE below 100%, it was
 			// the placeholder and is dropped; a controller disconnected while it waits drops it too
-			if (candidate[1] === 100 && !charging) {
+			if (candidate[1] === 100 && !charging && !c.steps) {
 				if (!held.has(c.serial)) held.set(c.serial, candidate);
 				continue;
 			}
@@ -221,7 +252,7 @@ function record(list: ControllerBattery[], now: number) {
 			// The last level is repeated at the disconnection so the line reaches the end of the session
 			// (only a level read in this session: one from before would draw a level the session never had)
 			const last = entry.samples[entry.samples.length - 1];
-			if (last && last[0] >= session[0]) entry.samples.push([now, last[1], last[2]]);
+			if (last && last[0] >= session[0]) entry.samples.push(last[3] ? [now, last[1], last[2], 1] : [now, last[1], last[2]]);
 			dirty = true;
 		}
 	}
@@ -235,12 +266,18 @@ function record(list: ControllerBattery[], now: number) {
 export async function startHistory(pollMs: number) {
 	if (loaded) return;
 	loaded = true;
-	history = parse(await historyGet());
+	const saved = parse(await historyGet());
+	history = mergeByKey(saved);
+	if (Object.keys(saved).join() !== Object.keys(history).join()) scheduleSave();
 	closeStaleSessions();
 	dropShortReadings();
 	dropPlaceholderHundreds();
 	prune(Date.now());
-	const tick = () => record(batteries(false), Date.now());
+	const tick = () =>
+		record(
+			batteries(false).filter((c) => !c.noLevel),
+			Date.now(),
+		);
 	tick();
 	setInterval(tick, pollMs);
 }

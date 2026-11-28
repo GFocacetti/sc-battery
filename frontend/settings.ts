@@ -1,4 +1,5 @@
 import { callable } from '@steambrew/client';
+import { controllerKey } from 'battery';
 
 export type DisplayKey = 'showColor' | 'showNumber' | 'showPad' | 'showGauge' | 'showPercent';
 
@@ -78,7 +79,10 @@ export async function loadSettings() {
 		colors: Object.fromEntries(
 			Object.entries<unknown>(stored.colors && typeof stored.colors === 'object' ? (stored.colors as Record<string, unknown>) : {}).filter(
 				(entry): entry is [string, string] => typeof entry[1] === 'string' && /^#[0-9a-f]{6}$/i.test(entry[1]),
-			),
+			)
+				// Saved under Steam's raw serial by older versions: kept under the controller's key
+				.map(([serial, color]) => [controllerKey(serial), color] as const)
+				.filter(([key]) => key),
 		),
 	};
 	listeners.forEach((l) => l(current));
@@ -106,7 +110,9 @@ function readPerController(value: unknown): Settings['perController'] {
 		if (!choice || typeof choice !== 'object') continue;
 		const own: Partial<Record<DisplayKey, boolean>> = {};
 		for (const { key } of TOGGLES) if (typeof choice[key] === 'boolean') own[key] = choice[key];
-		if (Object.keys(own).length) result[serial] = own;
+		// Saved under Steam's raw serial by older versions: kept under the controller's key
+		const key = controllerKey(serial);
+		if (key && Object.keys(own).length) result[key] = { ...result[key], ...own };
 	}
 	return result;
 }

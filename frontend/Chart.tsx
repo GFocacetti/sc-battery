@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ControllerHistory, getHistory, onHistoryChanged } from 'history';
-import { colorFor, displayFor, onSettingsChanged, resetController, saveSettings, setColor, setForController, settings, Settings, TOGGLES } from 'settings';
+import { ControllerHistory, getHistory, onHistoryChanged, Sample } from 'history';
+import { colorFor, displayFor, onSettingsChanged, resetController, saveSettings, setColor, setForController, settings, Settings, TOGGLES, DisplayKey } from 'settings';
 import { batteries } from 'battery';
+import { t as tr } from 'lang';
 
 // "rgb(r, g, b)" -> "#rrggbb", for the colour picker
 const toHex = (rgb: string) => {
@@ -71,7 +72,7 @@ function axisLabels(ticks: number[], from: number, to: number): [number, string]
 
 // The shown span in words, e.g. "Last 6 h" or "Last 3 days"
 function spanLabel(span: number) {
-	return span < 2 * DAY ? `Last ${Math.round(span / HOUR)} h` : `Last ${Math.round(span / DAY)} days`;
+	return span < 2 * DAY ? tr('Last {n} h', Math.round(span / HOUR)) : tr('Last {n} days', Math.round(span / DAY));
 }
 
 // Gaps narrower than this many pixels get no shading: on long ranges they would only add noise
@@ -79,7 +80,7 @@ const MIN_GAP_PX = 24;
 const LINE = '#59bf40';
 const LOW = '#e2412f';
 
-type Sample = [number, number, number];
+
 
 // Tangents for a monotone cubic curve through the points (Fritsch-Carlson): smooth, but never
 // above or below the readings it joins
@@ -271,17 +272,17 @@ function drainPerHour(entry: ControllerHistory) {
 
 // Small on/off switches for the parts of this controller's indicator in the top bar, with a way back
 // to the general settings (Millennium's plugin panel) once it has its own
-function DisplaySwitches({ serial }: { serial?: string }) {
+export function DisplaySwitches({ serial, only }: { serial?: string; only?: DisplayKey[] }) {
 	const [config, setConfig] = useState<Settings>(settings());
 	useEffect(() => onSettingsChanged(setConfig) as unknown as () => void, []);
 	return (
 		<div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginBottom: '10px' }}>
 			{serial && config.perController[serial] && (
 				<div onClick={() => resetController(serial)} style={{ cursor: 'pointer', color: '#1a9fff', order: 1 }}>
-					Use general settings
+					{tr('Use general settings')}
 				</div>
 			)}
-			{TOGGLES.map(({ key, label }) => {
+			{TOGGLES.filter(({ key }) => !only || only.includes(key)).map(({ key, label }) => {
 				const on = serial ? displayFor(config, serial)[key] : config[key];
 				return (
 					<div
@@ -303,13 +304,13 @@ function DisplaySwitches({ serial }: { serial?: string }) {
 								}}
 							/>
 						</div>
-						{label}
+						{tr(label)}
 						{/* Next to "Colour": the dot's colour, chosen freely (the LED colour set in Steam until changed) */}
 						{key === 'showColor' && serial && (
 							<>
 								<input
 									type="color"
-									title="Dot colour"
+									title={tr('Dot colour')}
 									value={toHex(colorFor(config, serial, batteries(false).find((b) => b.serial === serial)?.led ?? '#ffffff'))}
 									onClick={(e) => e.stopPropagation()}
 									onChange={(e) => setColor(serial, e.target.value)}
@@ -317,7 +318,7 @@ function DisplaySwitches({ serial }: { serial?: string }) {
 								/>
 								{config.colors[serial] && (
 									<span
-										title="Back to the LED colour set in Steam"
+										title={tr('Back to the LED colour set in Steam')}
 										onClick={(e) => {
 											e.stopPropagation();
 											setColor(serial, undefined);
@@ -374,10 +375,10 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 			<div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px' }}>
 				<div onClick={() => setOptionsOpen((o) => !o)} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: optionsOpen ? '#dcdedf' : '#8b929a', userSelect: 'none' }}>
 					<span style={{ display: 'inline-block', fontSize: '9px', transition: 'transform 0.15s', transform: optionsOpen ? 'rotate(90deg)' : 'none' }}>▶</span>
-					Options
+					{tr('Options')}
 				</div>
 				<div style={{ flex: 1 }} />
-				<span style={{ color: '#8b929a' }} title="Scroll to zoom">
+				<span style={{ color: '#8b929a' }} title={tr('Scroll to zoom')}>
 					{spanLabel(span)}
 				</span>
 			</div>
@@ -427,16 +428,17 @@ export default function ChartPanel({ serial }: { serial?: string }) {
 						<Graph entry={entry} from={from} to={to} />
 					</div>
 					<div style={{ display: 'flex', flexWrap: 'wrap', columnGap: '16px', rowGap: '2px', margin: '8px 0 0', color: '#8b929a' }}>
-						{current && <span>Now: {current[1]}%{current[2] ? ' (charging)' : ''}</span>}
-						{drain.game > 0 && <span>In game: {drain.game.toFixed(1)}% per hour</span>}
-						{drain.idle > 0 && <span>Outside games: {drain.idle.toFixed(1)}% per hour</span>}
-						{drain.game > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.game) * HOUR)} of play left</span>}
-						{!drain.game && drain.idle > 0 && current && !current[2] && <span>About {formatDuration((current[1] / drain.idle) * HOUR)} left</span>}
-						{drain.rough && (drain.game > 0 || drain.idle > 0) && <span style={{ width: '100%', fontSize: '11px', fontStyle: 'italic' }}>Wait for more data for a more precise estimate.</span>}
+						{current && <span>{tr('Now: {n}%', current[1])}{current[2] ? tr(' (charging)') : ''}</span>}
+						{drain.game > 0 && <span>{tr('In game: {n}% per hour', drain.game.toFixed(1))}</span>}
+						{drain.idle > 0 && <span>{tr('Outside games: {n}% per hour', drain.idle.toFixed(1))}</span>}
+						{drain.game > 0 && current && !current[2] && <span>{tr('About {n} of play left', formatDuration((current[1] / drain.game) * HOUR))}</span>}
+						{!drain.game && drain.idle > 0 && current && !current[2] && <span>{tr('About {n} left', formatDuration((current[1] / drain.idle) * HOUR))}</span>}
+						{!!current?.[3] && <span style={{ width: '100%', fontSize: '11px', fontStyle: 'italic' }}>{tr('Level from the Xbox Wireless Adapter: in four steps')}</span>}
+						{drain.rough && (drain.game > 0 || drain.idle > 0) && <span style={{ width: '100%', fontSize: '11px', fontStyle: 'italic' }}>{tr('Wait for more data for a more precise estimate.')}</span>}
 					</div>
 				</>
 			) : (
-				<div style={{ color: '#8b929a' }}>No readings yet.</div>
+				<div style={{ color: '#8b929a' }}>{tr('No readings yet.')}</div>
 			)}
 		</div>
 	);

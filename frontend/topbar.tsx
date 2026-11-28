@@ -3,7 +3,8 @@ import { createRoot, Root } from 'react-dom/client';
 import { findClassModule, IconsModule, Menu, showContextMenu } from '@steambrew/client';
 import { batteries, ControllerBattery, startWindowsBatteries, STEAM_CONTROLLER_TYPES } from 'battery';
 import { colorFor, displayFor, onSettingsChanged, settings, Settings } from 'settings';
-import ChartPanel from 'Chart';
+import ChartPanel, { DisplaySwitches } from 'Chart';
+import { t as tr } from 'lang';
 import { startHistory } from 'history';
 
 const HOST_ID = 'sc-battery-indicator';
@@ -166,6 +167,19 @@ function PlayerBadge({ player, led, showNumber }: { player: number; led: string;
 	);
 }
 
+// Shown instead of the chart for an Xbox controller on USB, whose level nothing reports. The switches that
+// don't depend on the battery (player dot colour and number) stay available.
+function NoLevelNote({ serial }: { serial: string }) {
+	return (
+		<div style={{ width: '340px', color: '#dcdedf', fontSize: '12px', lineHeight: '1.5' }}>
+			<div style={{ fontWeight: 'bold', marginBottom: '6px' }}>{tr('Battery level not available')}</div>
+			<div style={{ marginBottom: '6px' }}>{tr('xbox-usb-note')}</div>
+			<div style={{ marginBottom: '10px' }}>{tr('xbox-usb-howto')}</div>
+			<DisplaySwitches serial={serial} only={['showColor', 'showNumber']} />
+		</div>
+	);
+}
+
 function Indicator() {
 	const [config, setConfig] = useState<Settings>(settings());
 	const [list, setList] = useState<ControllerBattery[]>(() => batteries(settings().steamControllerOnly));
@@ -187,14 +201,14 @@ function Indicator() {
 			{list.map((c) => (
 				<div
 					key={c.index}
-					title={`${c.level}%${c.charging ? ' ⚡' : ''}`}
+					title={c.noLevel ? tr('Battery level not available over a USB cable') : c.steps ? tr('Level from the Xbox Wireless Adapter: in four steps') : `${c.level}%${c.charging ? ' ⚡' : ''}`}
 					style={{ display: 'flex', alignItems: 'center', gap: '3px', cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
 					// Steam's own menus open in a popup window of their own, the only way to show above the store and community pages
 					onClick={(e) =>
 						showContextMenu(
 							<Menu label="SC-Battery">
 								<div style={{ padding: '12px', background: '#1e2329', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontFamily: '"Motiva Sans", Arial, sans-serif' }}>
-									<ChartPanel serial={c.serial} />
+									{c.noLevel ? <NoLevelNote serial={c.serial} /> : <ChartPanel serial={c.serial} />}
 								</div>
 							</Menu>,
 							e.currentTarget,
@@ -203,8 +217,14 @@ function Indicator() {
 					}
 				>
 					{list.length > 1 && (displayFor(config, c.serial).showColor || displayFor(config, c.serial).showNumber) && <PlayerBadge player={c.player} led={displayFor(config, c.serial).showColor ? colorFor(config, c.serial, c.led) : 'rgb(220, 222, 223)'} showNumber={displayFor(config, c.serial).showNumber} />}
-					{(displayFor(config, c.serial).showPad || displayFor(config, c.serial).showGauge) && <SteamBatteryIcon type={c.type} level={c.level} charging={c.charging} showPad={displayFor(config, c.serial).showPad} showGauge={displayFor(config, c.serial).showGauge} />}
-					{displayFor(config, c.serial).showPercent && <span>{c.level}%</span>}
+					{/* Without a level only the controller shows, whatever the switches say: it is all there is to show */}
+					{c.noLevel ? (
+						<SteamBatteryIcon type={c.type} level={0} charging={false} showPad={true} showGauge={false} />
+					) : (
+						(displayFor(config, c.serial).showPad || displayFor(config, c.serial).showGauge) && <SteamBatteryIcon type={c.type} level={c.level} charging={c.charging} showPad={displayFor(config, c.serial).showPad} showGauge={displayFor(config, c.serial).showGauge} />
+					)}
+					{/* A level in four steps has no meaningful %: the gauge alone shows it */}
+					{!c.noLevel && !c.steps && displayFor(config, c.serial).showPercent && <span>{c.level}%</span>}
 				</div>
 			))}
 		</div>
