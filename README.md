@@ -16,7 +16,7 @@ A Millennium plugin that shows the battery level of your controllers in the top 
   - hover for the level at any reading;
   - average drain in game and outside games (any running game counts, non-Steam ones too), with an estimate of the play time left.
 - The history is kept across Steam restarts. While a controller is off, the chart joins the last reading before and the first one after with a dashed line; a green dot marks a charge done in the meantime.
-- Steam briefly reports 100% when a controller connects. Those false readings never reach the chart: a level is recorded once it has held for 15 seconds, and a 100% that falls back to the level it came from (within 5%) is dropped.
+- Steam briefly reports 100% when a controller connects. Those false readings never reach the chart: a level is recorded once it has held for 15 seconds, and a 100% that falls back to the level it came from (within 5%), or drops by more than 20% at once, is dropped.
 
 The level comes from Steam itself (the same value Big Picture shows), as reported by the controller firmware.
 
@@ -28,7 +28,7 @@ Each controller can also have its own: open its chart and click **Options**. The
 
 ## Installing
 
-1. Download `sc-battery-0.1.zip` from the [latest release](../../releases/latest).
+1. Download `sc-battery-0.1.1.zip` from the [latest release](../../releases/latest).
 2. Extract it into `Steam\millennium\plugins`, so that you get `Steam\millennium\plugins\sc-battery\plugin.json`.
 3. Restart Steam and turn the plugin on in Millennium's plugin list.
 
