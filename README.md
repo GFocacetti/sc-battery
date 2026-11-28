@@ -28,7 +28,7 @@ Each controller can also have its own: open its chart and click **Options**. The
 
 ## Installing
 
-1. Download `sc-battery-0.1.1.zip` from the [latest release](../../releases/latest).
+1. Download `sc-battery-0.1.2.zip` from the [latest release](../../releases/latest).
 2. Extract it into `Steam\millennium\plugins`, so that you get `Steam\millennium\plugins\sc-battery\plugin.json`.
 3. Restart Steam and turn the plugin on in Millennium's plugin list.
 

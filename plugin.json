@@ -6,5 +6,5 @@
 	"description": "Shows the battery level of your controllers (Steam Controller, PlayStation, Xbox) in the top bar of the Steam desktop client, with a battery history chart.",
 	"backendType": "lua",
 	"useBackend": true,
-	"version": "0.1.1"
+	"version": "0.1.2"
 }
