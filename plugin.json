@@ -3,7 +3,7 @@
 	"name": "sc-battery",
 	"common_name": "SC-Battery",
 	"author": "GFocacetti",
-	"description": "Shows the battery level of the connected Steam Controller in the top bar of the Steam desktop client, as Big Picture does.",
+	"description": "Shows the battery level of your controllers (Steam Controller, PlayStation, Xbox) in the top bar of the Steam desktop client, with a battery history chart.",
 	"backendType": "lua",
 	"useBackend": true,
 	"version": "0.1.1"
