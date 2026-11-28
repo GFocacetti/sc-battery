@@ -9,7 +9,12 @@ A Millennium plugin that shows the battery level of your controllers in the top 
 - A controller icon with Steam's own battery gauge (the one Big Picture uses) and the percentage, or either of them alone, right next to the news and notification buttons.
 - The gauge shows charging and turns red below 15%.
 - Every controller connected at the same time gets its own indicator; with more than one, each shows its player number on a coloured dot. The dot takes the LED colour set in Steam, or any colour you pick for that controller.
-- Each controller shows the icon of its model. For Xbox controllers Steam gets no level, so the level Windows reports is used instead, read every minute by a small hidden helper while Steam runs.
+- Each controller shows the icon of its model. For Xbox controllers Steam gets no level, so the level Windows reports is used instead, read every minute by a small hidden helper while Steam runs:
+  - over Bluetooth, the level in %;
+  - through the Xbox Wireless Adapter, the level in four steps (empty, low, medium, full), shown without a percentage;
+  - over a USB cable no level can be read: the controller shows with its icon only, and clicking it explains how to connect it over Bluetooth.
+- The same controller keeps one history and its own settings whichever way it is connected.
+- The texts are in Italian on an Italian Steam, in English otherwise.
 - Click the indicator for a battery chart:
   - scroll to zoom, from the last hour to the last 30 days;
   - drag with the left button to move through the past, double click to come back to now;
@@ -28,7 +33,7 @@ Each controller can also have its own: open its chart and click **Options**. The
 
 ## Installing
 
-1. Download `sc-battery-0.1.2.zip` from the [latest release](../../releases/latest).
+1. Download `sc-battery-0.1.3.zip` from the [latest release](../../releases/latest).
 2. Extract it into `Steam\millennium\plugins`, so that you get `Steam\millennium\plugins\sc-battery\plugin.json`.
 3. Restart Steam and turn the plugin on in Millennium's plugin list.
 
